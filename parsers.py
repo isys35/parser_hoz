@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 import db
 import re
 from urllib.parse import quote
+import traceback
 
 
 class Parser:
@@ -333,7 +334,6 @@ def start():
     3 - https://garden-rs.ru
     4 - http://www.asemena.ru
     """
-    print(info)
     select_parser = input('Выберите сайт (1,2,3,4): ')
     if select_parser == '1':
         parser = VhozParser()
@@ -352,4 +352,9 @@ def start():
 
 
 if __name__ == '__main__':
-    start()
+    try:
+        start()
+    except Exception:
+        print(traceback.format_exc())
+        input('Нажмите любую кнопку...')
+
