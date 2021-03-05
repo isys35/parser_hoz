@@ -328,12 +328,13 @@ class AsemenaParser(Parser):
 
 def start():
     info = """
-    Доступные сайты:
+Доступные сайты:
     1 -  https://www.vhoz.ru
     2 - http://ivanovskoe.pro
     3 - https://garden-rs.ru
     4 - http://www.asemena.ru
     """
+    print(info)
     select_parser = input('Выберите сайт (1,2,3,4): ')
     if select_parser == '1':
         parser = VhozParser()
