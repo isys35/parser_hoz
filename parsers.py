@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import db
 import re
-from urllib.parse import quote, unquote
+from urllib.parse import quote
 
 
 class Parser:
@@ -99,17 +99,9 @@ class VhozParser(Parser):
         return imgs
 
     def parse_data_product(self, response: str):
-        data = {}
-        name = self._parse_name(response)
-        data['Имя'] = name
-        description = self._parse_description(response)
-        data['Описание'] = description
-        aviable = self._parse_aviable(response)
-        data['В наличии?'] = aviable
-        categories = self._parse_categories(response)
-        data['Категории'] = categories
-        images = self._parse_images(response)
-        data['Изображения'] = images
+        data = {'Имя': self._parse_name(response), 'Описание': self._parse_description(response),
+                'В наличии?': self._parse_aviable(response), 'Категории': self._parse_categories(response),
+                'Изображения': self._parse_images(response)}
         return data
 
 
@@ -129,41 +121,77 @@ class IvanovskoeParser(Parser):
             return
         return self.host + found_items[0]['href']
 
-    def parse_data_product(self, response: str):
+    @staticmethod
+    def _parse_name(response):
         soup = BeautifulSoup(response, 'lxml')
-        data = {}
-        name = soup.select_one('h1').text.strip()
-        data['Имя'] = name
+        return soup.select_one('h1').text.strip()
+
+    @staticmethod
+    def _parse_categories(response):
+        soup = BeautifulSoup(response, 'lxml')
         categories_block = soup.select_one('.widget-680')
         categories = [el.text for el in categories_block.select('a')]
         categories = '>'.join(categories)
-        data['Категории'] = categories
-        mark = soup.select_one('.product-new')
-        if mark:
-            data['Метки'] = mark.text
+        return categories
+
+    @staticmethod
+    def _parse_mark(response):
+        soup = BeautifulSoup(response, 'lxml')
+        mark_block = soup.select_one('.product-new')
+        if mark_block:
+            return mark_block.text
+
+    @staticmethod
+    def _parse_price(response):
+        soup = BeautifulSoup(response, 'lxml')
         price_block = soup.select_one('.price-current')
-        data['Базовая цена'] = price_block.text.strip()
-        img = self.host + soup.select_one('.product-image-a')['href']
-        data['Изображения'] = img
-        description = soup.select_one('.product-description-body').text.strip()
-        data['Описание'] = description
+        return price_block.text.strip()
+
+    def _parse_images(self, response):
+        soup = BeautifulSoup(response, 'lxml')
+        return self.host + soup.select_one('.product-image-a')['href']
+
+    @staticmethod
+    def _parse_description(response):
+        soup = BeautifulSoup(response, 'lxml')
+        return soup.select_one('.product-description-body').text.strip()
+
+    @staticmethod
+    def _parse_option(response):
+        soup = BeautifulSoup(response, 'lxml')
         option_title = soup.select_one('.option-title')
         if option_title:
             if option_title.text == 'Производитель:':
-                data['Имя атрибута 1'] = 'Производитель:'
-                data['Значение(-я) аттрибута(-ов) 1'] = soup.select_one('.option-body').text
+                return 'Производитель:', soup.select_one('.option-body').text
+        return None, None
+
+    @staticmethod
+    def _parse_weight(response):
+        soup = BeautifulSoup(response, 'lxml')
         trs = soup.select('tr')
         for tr in trs:
             if tr.select('th')[0].text == 'Объем/ масса':
-                data['Вес (kg)'] = tr.select('td')[0].text
-                break
+                return tr.select('td')[0].text
+
+    @staticmethod
+    def _parse_aviable(response):
+        soup = BeautifulSoup(response, 'lxml')
         aviable_block = soup.select_one('.shop-product-button.type-3.buy')
         if aviable_block:
             aviable = 1
         else:
             aviable = 0
-        data['В наличии?'] = aviable
+        return aviable
+
+    def parse_data_product(self, response: str):
+        data = {'Имя': self._parse_name(response), 'Категории': self._parse_categories(response),
+                'Метки': self._parse_mark(response), 'Базовая цена': self._parse_price(response),
+                'Изображения': self._parse_images(response), 'Описание': self._parse_description(response),
+                'Имя атрибута 1': self._parse_option(response)[0],
+                'Значение(-я) аттрибута(-ов) 1': self._parse_option(response)[1],
+                'Вес (kg)': self._parse_weight(response), 'В наличии?': self._parse_aviable(response)}
         return data
+
 
 class GardenParser(Parser):
     def __init__(self):
@@ -178,14 +206,21 @@ class GardenParser(Parser):
             return
         return self.host + found_list.select_one('a.img')['href']
 
-    def parse_data_product(self, response: str):
+    @staticmethod
+    def _parse_name(response):
         soup = BeautifulSoup(response, 'lxml')
-        data = {}
-        name = soup.select_one('h1').text.strip()
-        data['Имя'] = name
+        return soup.select_one('h1').text.strip()
+
+    @staticmethod
+    def _parse_categories(response):
+        soup = BeautifulSoup(response, 'lxml')
         categories = [el.text.strip() for el in soup.select_one('.bread').select('a')]
         categories = '>'.join(categories)
-        data['Категории'] = categories
+        return categories
+
+    @staticmethod
+    def _parse_price(response):
+        soup = BeautifulSoup(response, 'lxml')
         parametrs_block = soup.select_one('.parametrs')
         paragraphs = parametrs_block.select('p')
         for paragraph in paragraphs:
@@ -193,16 +228,25 @@ class GardenParser(Parser):
             if spans:
                 if spans[0].text == 'Стоимость за 1шт.:':
                     price = spans[1].text
-                    data['Базовая цена'] = price
-                    break
-        discription = soup.select_one('.info_element').select_one('div').text
-        data['Описание'] = discription
+                    return price
+
+    @staticmethod
+    def _parse_description(response):
+        soup = BeautifulSoup(response, 'lxml')
+        return soup.select_one('.info_element').select_one('div').text
+
+    @staticmethod
+    def _parse_aviable(response):
+        soup = BeautifulSoup(response, 'lxml')
         dostupnost = soup.select_one('.dostupnost').select_one('span')
         if re.search('Под заказ', dostupnost.text):
             aviable = 0
         else:
             aviable = 1
-        data['В наличии?'] = aviable
+        return aviable
+
+    def _parse_images(self, response):
+        soup = BeautifulSoup(response, 'lxml')
         img_block = soup.select_one('.img_element')
         main_image = self.host + img_block.select_one('.popular_list').select_one('a.img')['href']
         small_images_block = img_block.select_one('.small_img')
@@ -211,14 +255,23 @@ class GardenParser(Parser):
             small_images = [self.host + el['href'] for el in small_images_block.select('a')]
         images = [main_image] + small_images
         images = '\n'.join(images)
-        data['Изображения'] = images
+        return images
+
+    @staticmethod
+    def _parse_weight(response):
+        soup = BeautifulSoup(response, 'lxml')
         property = soup.select_one('.korpus')
         trs = property.select('tr')
         for tr in trs:
             tds = tr.select('td')
             if tds[0].text == 'Вес:':
-                data['Вес (kg)'] = tds[1].text
-                break
+                return tds[1].text
+
+    def parse_data_product(self, response: str):
+        data = {'Имя': self._parse_name(response), 'Категории': self._parse_categories(response),
+                'Базовая цена': self._parse_price(response), 'Описание': self._parse_description(response),
+                'В наличии?': self._parse_aviable(response), 'Изображения': self._parse_images(response),
+                'Вес (kg)': self._parse_weight(response)}
         return data
 
 
@@ -235,21 +288,36 @@ class AsemenaParser(Parser):
             return
         return self.host + found_product['href']
 
-    def parse_data_product(self, response: str):
+    @staticmethod
+    def _parse_name(response):
         soup = BeautifulSoup(response, 'lxml')
-        data = {}
-        name = soup.select_one('.catalog_item_name').text.strip()
-        data['Имя'] = name
+        return soup.select_one('.catalog_item_name').text.strip()
+
+    @staticmethod
+    def _parse_categories(response):
+        soup = BeautifulSoup(response, 'lxml')
         categories = [el.text.strip() for el in soup.select_one('.breadcrumb').select('a')]
         categories = '>'.join(categories)
-        data['Категории'] = categories
+        return categories
+
+    @staticmethod
+    def _parse_aviable(response):
+        soup = BeautifulSoup(response, 'lxml')
         aviable = 0
         if soup.select_one('.nalichie'):
             if re.search('в наличии', soup.select_one('a').text):
                 aviable = 1
-        data['В наличии?'] = aviable
+        return aviable
+
+    @staticmethod
+    def _parse_description(response):
+        soup = BeautifulSoup(response, 'lxml')
         description = soup.select_one('.text_holder').text
-        data['Описание'] = description
+        return description
+
+    def parse_data_product(self, response: str):
+        data = {'Имя': self._parse_name(response), 'Категории': self._parse_categories(response),
+                'В наличии?': self._parse_aviable(response), 'Описание': self._parse_description(response)}
         return data
 
     def search_data(self, search_name):
