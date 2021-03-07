@@ -44,7 +44,7 @@ class Parser:
 
     @staticmethod
     def save_page(response: str, file_name='page.html'):
-        with open(file_name, 'w', encoding='cp1251') as html_file:
+        with open(file_name, 'w', encoding='utf-8') as html_file:
             html_file.write(response)
 
 
@@ -326,6 +326,154 @@ class AsemenaParser(Parser):
         super().search_data(search_name)
 
 
+class LamatorfParser(Parser):
+    def __init__(self):
+        super().__init__()
+        self.host = 'http://www.lamatorf.ru'
+        self.template_search_url = '{}/search/?q={}'
+
+    def parse_found_url(self, response, search_name):
+        soup = BeautifulSoup(response, 'lxml')
+        search_page = soup.select_one('.search-page')
+        all_urls_blocks = search_page.select('a')
+        for url_block in all_urls_blocks:
+            if re.search('/catalog/item/', url_block['href']):
+                return self.host + url_block['href']
+
+    def parse_data_product(self, response: str):
+        data = {'Имя': self._parse_name(response), 'Категории': self._parse_categories(response),
+                'Изображения': self._parse_images(response), 'Артикул': self._parse_articule(response),
+                'Имя атрибута 1': self._parse_option(response)[0],
+                'Значение(-я) аттрибута(-ов) 1': self._parse_option(response)[1],
+                'Вес (kg)': self._parse_weight(response), 'Описание': self._parse_description(response)
+                }
+        print(data)
+        return data
+
+    @staticmethod
+    def _parse_name(response):
+        soup = BeautifulSoup(response, 'lxml')
+        return soup.select_one('h1').text.strip()
+
+    @staticmethod
+    def _parse_categories(response):
+        soup = BeautifulSoup(response, 'lxml')
+        categories = soup.select_one('.breadcrumbs').select('a')
+        categories = [a.text for a in categories]
+        categories = '>'.join(categories)
+        return categories
+
+    def _parse_images(self, response):
+        soup = BeautifulSoup(response, 'lxml')
+        fancybox = soup.select_one('a.fancybox')
+        if fancybox:
+            return self.host + fancybox['href']
+
+    @staticmethod
+    def _parse_articule(response):
+        soup = BeautifulSoup(response, 'lxml')
+        options = soup.select_one('#product_options')
+        trs = options.select('tr')
+        for tr in trs:
+            tds = tr.select('td')
+            if tds:
+                if re.search('Артикул:', tds[0].text):
+                    return tds[1].text
+
+    @staticmethod
+    def _parse_option(response):
+        soup = BeautifulSoup(response, 'lxml')
+        options = soup.select_one('#product_options')
+        trs = options.select('tr')
+        for tr in trs:
+            tds = tr.select('td')
+            if tds:
+                if re.search('Производитель:', tds[0].text):
+                    return tds[0].text, tds[1].text
+
+    @staticmethod
+    def _parse_weight(response):
+        soup = BeautifulSoup(response, 'lxml')
+        options = soup.select_one('#product_options')
+        trs = options.select('tr')
+        for tr in trs:
+            tds = tr.select('td')
+            if tds:
+                if re.search('Вес', tds[0].text):
+                    return tds[1].text
+
+    @staticmethod
+    def _parse_description(response):
+        soup = BeautifulSoup(response, 'lxml')
+        desc_block = soup.select_one('#product_desc')
+        if desc_block:
+            desc_text = desc_block.select_one('div.txt')
+            if desc_text:
+                return desc_text.text.strip()
+
+
+class AgroserverParser(Parser):
+    def __init__(self):
+        super().__init__()
+        self.host = 'https://agroserver.ru'
+        self.template_search_url = '{}/search/{}/1/0/0/0/0/1/'
+
+    def parse_found_url(self, response, search_name):
+        soup = BeautifulSoup(response, 'lxml')
+        list_full = soup.select_one('.list_full')
+        if not list_full:
+            return
+        all_lines = list_full.select('.line')
+        return self.host + all_lines[0].select_one('a')['href']
+
+    def parse_data_product(self, response: str):
+        data = {'Имя': self._parse_name(response), 'Базовая цена': self._parse_price(response),
+                'Категории': self._parse_categories(response), 'Изображения': self._parse_images(response),
+                'Описание': self._parse_description(response)}
+        return data
+
+    @staticmethod
+    def _parse_name(response):
+        soup = BeautifulSoup(response, 'lxml')
+        return soup.select_one('h1').text.strip()
+
+    @staticmethod
+    def _parse_price(response):
+        soup = BeautifulSoup(response, 'lxml')
+        price_block = soup.select_one('.mprice')
+        if price_block:
+            return price_block.text.replace('цена: ', '').strip()
+
+    @staticmethod
+    def _parse_categories(response):
+        soup = BeautifulSoup(response, 'lxml')
+        nav = soup.select_one('.nav')
+        lis = nav.select('li')
+        categories = []
+        for li in lis:
+            a = li.select_one('a')
+            if a:
+                text_a = a.text.strip()
+                if re.search('Разместить объявление', text_a):
+                    continue
+                categories.append(text_a)
+        return '>'.join(categories)
+
+    @staticmethod
+    def _parse_images(response):
+        soup = BeautifulSoup(response, 'lxml')
+        mainpic = soup.select_one('.mainpic')
+        if mainpic:
+            return mainpic['src']
+
+    @staticmethod
+    def _parse_description(response):
+        soup = BeautifulSoup(response, 'lxml')
+        body = soup.select_one('body')
+        decription = body.select_one('.text').text
+        return decription
+
+
 def start():
     info = """
 Доступные сайты:
@@ -333,6 +481,8 @@ def start():
     2 - http://ivanovskoe.pro
     3 - https://garden-rs.ru
     4 - http://www.asemena.ru
+    5 - http://www.lamatorf.ru
+    6 - https://agroserver.ru
     """
     print(info)
     select_parser = input('Выберите сайт (1,2,3,4): ')
@@ -344,6 +494,10 @@ def start():
         parser = GardenParser()
     elif select_parser == '4':
         parser = AsemenaParser()
+    elif select_parser == '5':
+        parser = LamatorfParser()
+    elif select_parser == '6':
+        parser = AgroserverParser()
     else:
         parser = None
     while True:
@@ -358,4 +512,3 @@ if __name__ == '__main__':
     except Exception:
         print(traceback.format_exc())
         input('Нажмите любую кнопку...')
-
